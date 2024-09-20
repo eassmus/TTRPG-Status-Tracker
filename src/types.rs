@@ -7,6 +7,7 @@ pub enum Team {
     Unknown,
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum DurationUnit {
     Unknown,
     Turns,
@@ -111,16 +112,19 @@ impl From<String> for DurationUnit {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 struct Duration {
     length: u16,
     unit: DurationUnit,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 struct StatusEffect {
     name: String,
     duration: Duration,
 }
 
+#[derive(Debug, Clone)]
 pub struct Entity {
     name: String,
     damage_taken: u16,
@@ -128,7 +132,7 @@ pub struct Entity {
     status_effects: Vec<StatusEffect>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Game {
     entities: Vec<Entity>,
 }
@@ -142,6 +146,35 @@ fn argumment_abreviations(arg: &str) -> &str {
         "d" => "damage",
         "h" => "heal",
         _ => arg,
+    }
+}
+
+fn save_party(entities: Game, filename : String) -> Result<String, String> {
+    let mut string = String::new();
+    for entity in entities.entities.iter() {
+        if entity.team == Team::Party {
+            string.push_str(&entity.name);
+            string.push_str("\n");
+        }
+    }
+    //write to a file
+    match std::fs::write("saves/".to_string() + &filename + ".txt", string) {
+        Ok(_) => Ok("Saved Party".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn load_party(filename : String) -> Result<Vec<Entity>, String> {
+    //load from file
+    match std::fs::read_to_string("saves/".to_string() + &filename + ".txt") {
+        Ok(contents) => {
+            let mut entities: Vec<Entity> = Vec::new();
+            for line in contents.lines() {
+                entities.push(Entity::new(line.to_string(), Team::Party));
+            }
+            Ok(entities)
+        },
+        Err(e) => Err(e.to_string()),
     }
 }
 
@@ -257,7 +290,25 @@ impl Game {
                     }
                 }
                 Ok("Healed entity".to_string())
-            }
+            },
+            "save" => {
+                if args.len() < 2 {
+                    return Err("Not enough arguments".to_string());
+                }
+                save_party(self.clone(), args[1].to_string())
+            },
+            "load" => {
+                if args.len() < 2 {
+                    return Err("Not enough arguments".to_string());
+                }
+                match load_party(args[1].to_string()) {
+                    Ok(entities) => {
+                        self.entities = entities;
+                        Ok("Loaded Party".to_string())
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             "clear" => {
                 self.entities.clear();
                 Ok("Cleared entities".to_string())
