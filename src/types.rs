@@ -314,10 +314,44 @@ impl Game {
                 Ok("Cleared entities".to_string())
             },
             "help" => {
-                Ok("Valid Commands: add_entity, remove_entity, add_effect, remove_effect, damage, heal, clear".to_string())
+                if args.len() == 2 {
+                    match args[1] {
+                        "add_entity" => {
+                            return Ok("add_entity <name> <team>".to_string());
+                        },
+                        "remove_entity" => {
+                            return Ok("remove_entity <name>".to_string());
+                        },
+                        "add_effect" => {
+                            return Ok("add_effect <name> <effect> <length> <unit>".to_string());
+                        },
+                        "remove_effect" => {
+                            return Ok("remove_effect <name> <effect>".to_string());
+                        },
+                        "damage" => {
+                            return Ok("damage <name> <amount>".to_string());
+                        },
+                        "heal" => {
+                            return Ok("heal <name> <amount>".to_string());
+                        },
+                        "clear" => {
+                            return Ok("clear".to_string());
+                        },
+                        "save" => {
+                            return Ok("save <filename>".to_string());
+                        },
+                        "load" => {
+                            return Ok("load <filename>".to_string());
+                        },
+                        _ => {
+                            return Ok("Valid Commands: add_entity, remove_entity, add_effect, remove_effect, damage, heal, clear, save, load".to_string());
+                        }
+                    }
+                }
+                Ok("Valid Commands: add_entity, remove_entity, add_effect, remove_effect, damage, heal, clear, save, load. Use help <command> for more info".to_string())
             }
             _ => {
-                Err("Unrecognized command use help command to list commands".to_string())
+                Err("Unrecognized command use help to list commands".to_string())
             }
         }
     }
