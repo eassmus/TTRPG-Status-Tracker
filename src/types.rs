@@ -28,7 +28,7 @@ impl DurationUnit {
 
 impl From<String> for Team {
     fn from(team: String) -> Self {
-        match team.as_str() {
+        match team.to_lowercase().as_str() {
             "p" => Team::Party,
             "a" => Team::Allies,
             "n" => Team::Neutral,
@@ -39,6 +39,18 @@ impl From<String> for Team {
             "neutral" => Team::Neutral,
             "enemy" => Team::Enemy,
             _ => Team::Unknown,
+        }
+    }
+}
+
+impl From<Team> for String {
+    fn from(team: Team) -> Self {
+        match team {
+            Team::Party => "party".to_string(),
+            Team::Allies => "ally".to_string(),
+            Team::Neutral => "neutral".to_string(),
+            Team::Enemy => "enemy".to_string(),
+            Team::Unknown => "unknown".to_string(),
         }
     }
 }
@@ -149,28 +161,34 @@ fn argumment_abreviations(arg: &str) -> &str {
     }
 }
 
-fn save_party(entities: Game, filename : String) -> Result<String, String> {
+fn save(entities: Game, filename : String, team : Team) -> Result<String, String> {
     let mut string = String::new();
     for entity in entities.entities.iter() {
-        if entity.team == Team::Party {
+        if entity.team == team || team == Team::Unknown {
             string.push_str(&entity.name);
+            string.push_str("|");
+            string.push_str(&entity.team.to_string());
             string.push_str("\n");
         }
     }
     //write to a file
     match std::fs::write("saves/".to_string() + &filename + ".txt", string) {
-        Ok(_) => Ok("Saved Party".to_string()),
+        Ok(_) => Ok("Saved ".to_string() + team.to_string().as_str() + " to " + filename.as_str()),
         Err(e) => Err(e.to_string()),
     }
 }
 
-fn load_party(filename : String) -> Result<Vec<Entity>, String> {
+fn load(filename : String) -> Result<Vec<Entity>, String> {
     //load from file
     match std::fs::read_to_string("saves/".to_string() + &filename + ".txt") {
         Ok(contents) => {
             let mut entities: Vec<Entity> = Vec::new();
             for line in contents.lines() {
-                entities.push(Entity::new(line.to_string(), Team::Party));
+                let line = line.split("|").collect::<Vec<&str>>();
+                if line.len() != 2 {
+                    return Err("Invalid save file".to_string());
+                }
+                entities.push(Entity::new(line[0].to_string(), Team::from(line[1].to_string())));
             }
             Ok(entities)
         },
@@ -215,45 +233,57 @@ impl Game {
         list
     }
 
+    pub fn get_matchable_names(&mut self) -> Vec<String> {
+        let mut matchables = Vec::new();
+        for entity in self.entities.iter() {
+            matchables.push(entity.name.clone());
+        }
+        matchables
+    }
+
     pub fn process_command(&mut self, command: String) -> Result<String, String> {
         let args: Vec<&str> = command.split(" ").collect();
         match argumment_abreviations(args[0]) {
             "add_effect" => {
-                if args.len() < 3 {
+                if args.len() < 4 {
                     return Err("Not enough arguments".to_string());
                 }
+                let entity_names = Vec::from_iter(args[4..].iter().map(|x| x.to_string().to_lowercase()));
+                let effect = args[1].to_string();
+                let duration = args[2].parse().unwrap_or_else(|_| 0);
+                let duration_unit = DurationUnit::from(args[3].to_string());
                 for entity in self.entities.iter_mut() {
-                    if entity.name == args[1] {
+                    if entity_names.contains(&entity.name.to_lowercase()) {
                         entity.status_effects.push(StatusEffect {
-                            name : args[2].to_string(),
-                            duration : Duration {
-                                length : {if args.len() > 3 {args[3].parse().unwrap()} else {0}} as u16 ,
-                                unit : {if args.len() > 4 {DurationUnit::from(args[4].to_string())} else {DurationUnit::Unknown}},
+                            name: effect.clone(),
+                            duration: Duration {
+                                length: duration,
+                                unit: duration_unit,
                             },
                         });
-                        return Ok("Added effect".to_string());
                     }
                 }
-                Err("No Entity Found".to_string())
+                Ok("Added effects".to_string())
             },
             "remove_effect" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
+                let effect = args[1].to_string();
+                let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
                 for entity in self.entities.iter_mut() {
-                    if entity.name == args[1] {
-                        entity.status_effects.retain(|x| x.name != args[2]);
-                        break;
+                    if entity_names.contains(&entity.name.to_lowercase()) {
+                        entity.status_effects.retain(|x| x.name != effect);
                     }
                 }
-                Ok("Removed effect".to_string())
+                Ok("Removed effects".to_string())
             },
             "add_entity" => {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
                 }
                 for entity in self.entities.iter() {
-                    if entity.name == args[1].to_string() {
+                    if entity.name.to_lowercase() == args[1].to_string().to_lowercase() {
                         return Err("This entity already exists".to_string());
                     }
                 }
@@ -264,47 +294,61 @@ impl Game {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
                 }
-                self.entities.retain(|x| x.name != args[1]);
+                self.entities.retain(|x| x.name.to_lowercase() != args[1].to_lowercase());
                 Ok("Removed entity".to_string())
             },
             "damage" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
-                for entity in self.entities.iter_mut() {
-                    if entity.name == args[1] {
-                        entity.damage_taken += args[2].parse::<u16>().unwrap() as u16;
-                        break;
-                    }
+                let damage = args[1].parse::<u16>();
+                match damage {
+                    Ok(damage_amount) => {
+                        let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
+                        for entity in self.entities.iter_mut() {
+                            if entity_names.contains(&entity.name.to_lowercase()) {
+                                entity.damage_taken += damage_amount;
+                            }
+                        }
+                        Ok("Damaged entities".to_string())
+                    },
+                    Err(e) => Err(e.to_string()),
                 }
-                Ok("Damaged entity".to_string())
             },
             "heal" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
-                for entity in self.entities.iter_mut() {
-                    if entity.name == args[1] {
-                        entity.damage_taken -= args[2].parse::<u16>().unwrap() as u16;
-                        break;
-                    }
+                let healing = args[1].parse::<u16>();
+                match healing {
+                    Ok(healing_amount) => {
+                        let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
+                        for entity in self.entities.iter_mut() {
+                            if entity_names.contains(&entity.name.to_lowercase()) {
+                                entity.damage_taken += healing_amount;
+                            }
+                        }
+                        Ok("Healed entities".to_string())
+                    },
+                    Err(e) => Err(e.to_string()),
                 }
-                Ok("Healed entity".to_string())
             },
             "save" => {
-                if args.len() < 2 {
+                if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
-                save_party(self.clone(), args[1].to_string())
+                save(self.clone(), args[2].to_string(), Team::from(args[1].to_string()))
             },
             "load" => {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
                 }
-                match load_party(args[1].to_string()) {
+                match load(args[1].to_string()) {
                     Ok(entities) => {
-                        self.entities = entities;
-                        Ok("Loaded Party".to_string())
+                        for entity in entities {
+                            self.entities.push(entity);
+                        }
+                        Ok("Loaded".to_string())
                     },
                     Err(e) => Err(e),
                 }
@@ -323,22 +367,22 @@ impl Game {
                             return Ok("remove_entity <name>".to_string());
                         },
                         "add_effect" => {
-                            return Ok("add_effect <name> <effect> <length> <unit>".to_string());
+                            return Ok("add_effect <effect> <length> <unit> <names[]>".to_string());
                         },
                         "remove_effect" => {
-                            return Ok("remove_effect <name> <effect>".to_string());
+                            return Ok("remove_effect <effect> <names[]>".to_string());
                         },
                         "damage" => {
-                            return Ok("damage <name> <amount>".to_string());
+                            return Ok("damage <amount> <names[]>".to_string());
                         },
                         "heal" => {
-                            return Ok("heal <name> <amount>".to_string());
+                            return Ok("heal <amount> <names[]>".to_string());
                         },
                         "clear" => {
                             return Ok("clear".to_string());
                         },
                         "save" => {
-                            return Ok("save <filename>".to_string());
+                            return Ok("save <party | enemy | all> <filename>".to_string());
                         },
                         "load" => {
                             return Ok("load <filename>".to_string());
