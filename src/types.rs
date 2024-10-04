@@ -144,6 +144,17 @@ pub struct Entity {
     status_effects: Vec<StatusEffect>,
 }
 
+impl Entity {
+    pub fn new(name: String, team: Team) -> Entity {
+        Entity {
+            name: name.to_string(),
+            damage_taken: 0,
+            team: team,
+            status_effects: Vec::new(),
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct Game {
     entities: Vec<Entity>,
@@ -161,7 +172,7 @@ fn argumment_abreviations(arg: &str) -> &str {
     }
 }
 
-fn save(entities: Game, filename : String, team : Team) -> Result<String, String> {
+fn save(entities: Game, filename: String, team: Team) -> Result<String, String> {
     let mut string = String::new();
     for entity in entities.entities.iter() {
         if entity.team == team || team == Team::Unknown {
@@ -178,7 +189,7 @@ fn save(entities: Game, filename : String, team : Team) -> Result<String, String
     }
 }
 
-fn load(filename : String) -> Result<Vec<Entity>, String> {
+fn load(filename: String) -> Result<Vec<Entity>, String> {
     //load from file
     match std::fs::read_to_string("saves/".to_string() + &filename + ".txt") {
         Ok(contents) => {
@@ -188,10 +199,13 @@ fn load(filename : String) -> Result<Vec<Entity>, String> {
                 if line.len() != 2 {
                     return Err("Invalid save file".to_string());
                 }
-                entities.push(Entity::new(line[0].to_string(), Team::from(line[1].to_string())));
+                entities.push(Entity::new(
+                    line[0].to_string(),
+                    Team::from(line[1].to_string()),
+                ));
             }
             Ok(entities)
-        },
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -248,7 +262,8 @@ impl Game {
                 if args.len() < 4 {
                     return Err("Not enough arguments".to_string());
                 }
-                let entity_names = Vec::from_iter(args[4..].iter().map(|x| x.to_string().to_lowercase()));
+                let entity_names =
+                    Vec::from_iter(args[4..].iter().map(|x| x.to_string().to_lowercase()));
                 let effect = args[1].to_string();
                 let duration = args[2].parse().unwrap_or_else(|_| 0);
                 let duration_unit = DurationUnit::from(args[3].to_string());
@@ -264,20 +279,21 @@ impl Game {
                     }
                 }
                 Ok("Added effects".to_string())
-            },
+            }
             "remove_effect" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
                 let effect = args[1].to_string();
-                let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
+                let entity_names =
+                    Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
                 for entity in self.entities.iter_mut() {
                     if entity_names.contains(&entity.name.to_lowercase()) {
                         entity.status_effects.retain(|x| x.name != effect);
                     }
                 }
                 Ok("Removed effects".to_string())
-            },
+            }
             "add_entity" => {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
@@ -287,16 +303,24 @@ impl Game {
                         return Err("This entity already exists".to_string());
                     }
                 }
-                self.entities.push(Entity::new(args[1].to_string(), if args.len() > 2 {Team::from(args[2].to_string())} else {Team::Unknown}));
+                self.entities.push(Entity::new(
+                    args[1].to_string(),
+                    if args.len() > 2 {
+                        Team::from(args[2].to_string())
+                    } else {
+                        Team::Unknown
+                    },
+                ));
                 Ok("Added entity".to_string())
-            },
+            }
             "remove_entity" => {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
                 }
-                self.entities.retain(|x| x.name.to_lowercase() != args[1].to_lowercase());
+                self.entities
+                    .retain(|x| x.name.to_lowercase() != args[1].to_lowercase());
                 Ok("Removed entity".to_string())
-            },
+            }
             "damage" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
@@ -304,17 +328,18 @@ impl Game {
                 let damage = args[1].parse::<u16>();
                 match damage {
                     Ok(damage_amount) => {
-                        let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
+                        let entity_names =
+                            Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
                         for entity in self.entities.iter_mut() {
                             if entity_names.contains(&entity.name.to_lowercase()) {
                                 entity.damage_taken += damage_amount;
                             }
                         }
                         Ok("Damaged entities".to_string())
-                    },
+                    }
                     Err(e) => Err(e.to_string()),
                 }
-            },
+            }
             "heal" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
@@ -322,23 +347,28 @@ impl Game {
                 let healing = args[1].parse::<u16>();
                 match healing {
                     Ok(healing_amount) => {
-                        let entity_names = Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
+                        let entity_names =
+                            Vec::from_iter(args[2..].iter().map(|x| x.to_string().to_lowercase()));
                         for entity in self.entities.iter_mut() {
                             if entity_names.contains(&entity.name.to_lowercase()) {
-                                entity.damage_taken += healing_amount;
+                                entity.damage_taken -= healing_amount;
                             }
                         }
                         Ok("Healed entities".to_string())
-                    },
+                    }
                     Err(e) => Err(e.to_string()),
                 }
-            },
+            }
             "save" => {
                 if args.len() < 3 {
                     return Err("Not enough arguments".to_string());
                 }
-                save(self.clone(), args[2].to_string(), Team::from(args[1].to_string()))
-            },
+                save(
+                    self.clone(),
+                    args[2].to_string(),
+                    Team::from(args[1].to_string()),
+                )
+            }
             "load" => {
                 if args.len() < 2 {
                     return Err("Not enough arguments".to_string());
@@ -349,44 +379,44 @@ impl Game {
                             self.entities.push(entity);
                         }
                         Ok("Loaded".to_string())
-                    },
+                    }
                     Err(e) => Err(e),
                 }
-            },
+            }
             "clear" => {
                 self.entities.clear();
                 Ok("Cleared entities".to_string())
-            },
+            }
             "help" => {
                 if args.len() == 2 {
                     match args[1] {
                         "add_entity" => {
                             return Ok("add_entity <name> <team>".to_string());
-                        },
+                        }
                         "remove_entity" => {
                             return Ok("remove_entity <name>".to_string());
-                        },
+                        }
                         "add_effect" => {
                             return Ok("add_effect <effect> <length> <unit> <names[]>".to_string());
-                        },
+                        }
                         "remove_effect" => {
                             return Ok("remove_effect <effect> <names[]>".to_string());
-                        },
+                        }
                         "damage" => {
                             return Ok("damage <amount> <names[]>".to_string());
-                        },
+                        }
                         "heal" => {
                             return Ok("heal <amount> <names[]>".to_string());
-                        },
+                        }
                         "clear" => {
                             return Ok("clear".to_string());
-                        },
+                        }
                         "save" => {
                             return Ok("save <party | enemy | all> <filename>".to_string());
-                        },
+                        }
                         "load" => {
                             return Ok("load <filename>".to_string());
-                        },
+                        }
                         _ => {
                             return Ok("Valid Commands: add_entity, remove_entity, add_effect, remove_effect, damage, heal, clear, save, load".to_string());
                         }
@@ -394,20 +424,7 @@ impl Game {
                 }
                 Ok("Valid Commands: add_entity, remove_entity, add_effect, remove_effect, damage, heal, clear, save, load. Use help <command> for more info".to_string())
             }
-            _ => {
-                Err("Unrecognized command use help to list commands".to_string())
-            }
-        }
-    }
-}
-
-impl Entity {
-    pub fn new(name: String, team: Team) -> Entity {
-        Entity {
-            name: name.to_string(),
-            damage_taken: 0,
-            team: team,
-            status_effects: Vec::new(),
+            _ => Err("Unrecognized command use help to list commands".to_string()),
         }
     }
 }
